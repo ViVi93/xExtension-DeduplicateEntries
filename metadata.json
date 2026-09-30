@@ -1,0 +1,8 @@
+{
+	"name": "DeduplicateEntries",
+	"author": "ViVi",
+	"description": "Prevent duplicate entries across feeds by skipping insertion when an entry with the same hash already exists",
+	"version": "1.0.0",
+	"entrypoint": "DeduplicateEntries",
+	"type": "system"
+}
