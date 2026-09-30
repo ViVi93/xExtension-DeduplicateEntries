@@ -45,7 +45,18 @@ This extension hooks into FreshRSS's `entry_before_insert` event and checks whet
 
 2. The extension directory must be named `xExtension-DeduplicateEntries` (FreshRSS convention).
 
-3. Go to **Settings → Extensions** in your FreshRSS and enable **Deduplicate Entries**.
+3. **Enable the extension in the system config.** This extension is type `system`, so it must be enabled in the system configuration file (`data/config.php`), not the user config. Add the following to the `extensions_enabled` array in `data/config.php`:
+
+   ```php
+   'extensions_enabled' => [
+       // ... other extensions ...
+       'DeduplicateEntries' => true,
+   ],
+   ```
+
+   Alternatively, you can change the extension type to `"user"` in `metadata.json` if you prefer to enable it per-user via the web UI.
+
+4. Go to **Settings → Extensions** in your FreshRSS and verify **Deduplicate Entries** is listed and enabled.
 
 ## Configuration
 
