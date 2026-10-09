@@ -79,22 +79,29 @@ This means if feeds A, B, and C all carry the same wire story, only the first on
 This extension only prevents **new** duplicates. To remove duplicates that already exist in your database, you can run a one-time SQL query:
 
 ```sql
--- Delete duplicates by exact link match
+-- Delete duplicates by exact link match (empty links are left untouched)
 DELETE FROM entry
-WHERE id NOT IN (
+WHERE link <> ''
+  AND id NOT IN (
     SELECT MIN(id)
     FROM entry
+    WHERE link <> ''
     GROUP BY link
 );
 
--- Delete duplicates by link without fragment
+-- Delete duplicates by link without fragment (empty links are left untouched)
 DELETE FROM entry
-WHERE id NOT IN (
+WHERE link <> ''
+  AND id NOT IN (
     SELECT MIN(id)
     FROM entry
+    WHERE link <> ''
     GROUP BY CASE WHEN instr(link, '#') > 0 THEN substr(link, 1, instr(link, '#') - 1) ELSE link END
 );
 ```
+
+The `link <> ''` guard is important — without it every entry with an empty link would
+collapse into a single row.
 
 **Always back up your database before running this query.**
 
@@ -105,6 +112,15 @@ WHERE id NOT IN (
 - No conflicts with other extensions.
 
 ## Changelog
+
+### 1.1.1
+
+- **Fixed same-batch duplicates.** New entries are staged in FreshRSS's `entrytmp`
+  table and only merged into `entry` by `commitNewEntries()` at the end of a refresh
+  batch. The dedup check previously queried only `entry`, so two copies of the same
+  article arriving in the **same refresh batch** (e.g. the same NDTV story carried by
+  two feeds) could not see each other and were both committed. The check now covers
+  both `entry` and `entrytmp`.
 
 ### 1.1.0
 

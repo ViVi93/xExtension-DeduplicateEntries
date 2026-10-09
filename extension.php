@@ -17,6 +17,32 @@ class DeduplicateEntriesExtension extends Minz_Extension {
         return $url;
     }
 
+    /**
+     * Whether an entry with this link already exists.
+     *
+     * New entries are staged in the `entrytmp` table and only merged into
+     * `entry` by commitNewEntries() at the end of a refresh batch. Checking
+     * only `entry` therefore misses duplicates that arrive within the same
+     * batch (e.g. the same NDTV story pulled from two feeds in one refresh),
+     * so both tables are checked.
+     *
+     * NB: Minz_ModelPdo::fetchAssoc() binds parameters by array key name, so
+     * named placeholders + an associative array are required. A positional
+     * array (e.g. [$link]) throws ValueError on PHP 8.1+.
+     */
+    private function linkExists($entryDao, string $link): bool {
+        foreach (['entry', 'entrytmp'] as $table) {
+            $result = $entryDao->fetchAssoc(
+                "SELECT COUNT(*) as cnt FROM {$table} WHERE link = :link",
+                [':link' => $link]
+            );
+            if ($result !== null && isset($result[0]['cnt']) && (int)$result[0]['cnt'] > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public function deduplicateEntry($entry) {
         if (is_object($entry) === false) {
             return $entry;
@@ -29,33 +55,17 @@ class DeduplicateEntriesExtension extends Minz_Extension {
 
         $entryDao = FreshRSS_Factory::createEntryDao();
 
-        // Note: Minz_ModelPdo::fetchAssoc() binds parameters by array key name,
-        // so named placeholders + an associative array are required. A positional
-        // array (e.g. [$link]) throws ValueError on PHP 8.1+.
-
         // Check 1: exact link match
-        $result = $entryDao->fetchAssoc(
-            "SELECT COUNT(*) as cnt FROM entry WHERE link = :link",
-            [':link' => $link]
-        );
-
-        if ($result !== null && isset($result[0]['cnt']) && (int)$result[0]['cnt'] > 0) {
+        if ($this->linkExists($entryDao, $link)) {
             Minz_Log::warning(_t('ext.deduplicate.warning.duplicate_skipped', $entry->title()));
             return null;
         }
 
         // Check 2: link without fragment (handles URL variations like #publisher=newsstand)
         $linkNoFragment = $this->stripFragment($link);
-        if ($linkNoFragment !== $link) {
-            $result = $entryDao->fetchAssoc(
-                "SELECT COUNT(*) as cnt FROM entry WHERE link = :link",
-                [':link' => $linkNoFragment]
-            );
-
-            if ($result !== null && isset($result[0]['cnt']) && (int)$result[0]['cnt'] > 0) {
-                Minz_Log::warning(_t('ext.deduplicate.warning.duplicate_skipped', $entry->title()));
-                return null;
-            }
+        if ($linkNoFragment !== $link && $this->linkExists($entryDao, $linkNoFragment)) {
+            Minz_Log::warning(_t('ext.deduplicate.warning.duplicate_skipped', $entry->title()));
+            return null;
         }
 
         return $entry;

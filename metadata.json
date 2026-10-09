@@ -2,7 +2,7 @@
 	"name": "DeduplicateEntries",
 	"author": "ViVi",
 	"description": "Prevent duplicate entries across feeds by skipping insertion when an entry with the same URL already exists",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"entrypoint": "DeduplicateEntries",
 	"type": "system"
 }
