@@ -10,14 +10,14 @@ FreshRSS's built-in `same_title_in_feed` setting only works within a single feed
 
 ## Solution
 
-This extension hooks into FreshRSS's `entry_before_insert` event and checks whether an entry with the same hash (MD5 of the article link) already exists in the database. If a duplicate is found, the new entry is silently skipped — only the first occurrence is kept.
+This extension hooks into FreshRSS's `entry_before_insert` event and checks whether an entry with the same URL already exists in the database. If a duplicate is found, the new entry is silently skipped — only the first occurrence is kept. It also handles URL variations (e.g., fragments like `#publisher=newsstand`) by comparing URLs with fragments stripped.
 
 ### Key features
 
 - **Automatic** — no configuration required. Install and enable; it just works.
 - **Cross-feed** — deduplicates across all feeds, not just within a single feed.
-- **Hash-based** — uses FreshRSS's built-in entry hash (derived from the article GUID/link), so it reliably identifies the same article even when titles differ slightly between feeds.
-- **Lightweight** — one database query per new entry. No background jobs, no cron, no external services.
+- **URL-based** — compares article URLs (with fragments stripped), so it reliably identifies the same article even when feeds use different GUIDs or URL parameters.
+- **Lightweight** — one or two database queries per new entry. No background jobs, no cron, no external services.
 - **Non-destructive** — existing duplicates are not automatically deleted. Only new duplicates are prevented. (You can clean up existing duplicates manually or with a one-time script.)
 
 ## Requirements
@@ -50,9 +50,11 @@ This extension hooks into FreshRSS's `entry_before_insert` event and checks whet
    ```php
    'extensions_enabled' => [
        // ... other extensions ...
-       'DeduplicateEntries' => true,
+       'DeduplicateEntries' => true,  // must be boolean true, not 1 or '1'
    ],
    ```
+
+   **Important:** The value must be boolean `true`, not integer `1` or string `'1'`. FreshRSS's ExtensionManager filters with `is_bool($value)`, so non-boolean values are silently ignored.
 
    Alternatively, you can change the extension type to `"user"` in `metadata.json` if you prefer to enable it per-user via the web UI.
 
@@ -64,10 +66,11 @@ No configuration is needed. The extension works automatically once enabled.
 
 ## How it works
 
-When FreshRSS fetches new articles from your feeds, each article is assigned a hash based on its GUID/link. Before inserting a new entry, this extension queries the database to check if an entry with the same hash already exists:
+When FreshRSS fetches new articles from your feeds, each article has a URL (link). Before inserting a new entry, this extension queries the database to check if an entry with the same URL already exists:
 
-- **If the hash exists** → the entry is skipped (not inserted). A warning is logged.
-- **If the hash is new** → the entry is inserted normally.
+- **If the exact URL exists** → the entry is skipped (not inserted). A warning is logged.
+- **If the URL without fragment exists** (e.g., `article.html#publisher=newsstand` matches `article.html`) → the entry is also skipped.
+- **If the URL is new** → the entry is inserted normally.
 
 This means if feeds A, B, and C all carry the same wire story, only the first one fetched will appear in your reading list. The other two will be silently dropped.
 
@@ -76,11 +79,20 @@ This means if feeds A, B, and C all carry the same wire story, only the first on
 This extension only prevents **new** duplicates. To remove duplicates that already exist in your database, you can run a one-time SQL query:
 
 ```sql
+-- Delete duplicates by exact link match
 DELETE FROM entry
 WHERE id NOT IN (
     SELECT MIN(id)
     FROM entry
-    GROUP BY hash
+    GROUP BY link
+);
+
+-- Delete duplicates by link without fragment
+DELETE FROM entry
+WHERE id NOT IN (
+    SELECT MIN(id)
+    FROM entry
+    GROUP BY CASE WHEN instr(link, '#') > 0 THEN substr(link, 1, instr(link, '#') - 1) ELSE link END
 );
 ```
 
@@ -91,6 +103,24 @@ WHERE id NOT IN (
 - Works with SQLite, MySQL, and PostgreSQL backends.
 - Compatible with FreshRSS 1.25.0 and later.
 - No conflicts with other extensions.
+
+## Changelog
+
+### 1.1.0
+
+- Switched deduplication from FreshRSS's entry **hash** to the article **URL (link)**,
+  with fragments stripped, so URL variations such as `article.html#publisher=newsstand`
+  are recognised as the same article.
+- **Fixed a fatal error** (`ValueError: PDOStatement::bindValue(): Argument #1 ($param)
+  must be greater than or equal to 1`) that aborted feed refreshes on PHP 8.1+.
+  `Minz_ModelPdo::fetchAssoc()` binds parameters by array **key name**, so the queries now
+  use named placeholders (`link = :link` with `[':link' => $link]`) instead of a positional
+  array (`link = ?` with `[$link]`).
+- Added a second check for the fragment-stripped URL.
+
+### 1.0.0
+
+- Initial release — hash-based cross-feed duplicate prevention.
 
 ## License
 
