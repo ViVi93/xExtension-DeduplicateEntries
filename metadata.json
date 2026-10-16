@@ -1,8 +1,8 @@
 {
 	"name": "DeduplicateEntries",
 	"author": "ViVi",
-	"description": "Prevent duplicate entries across feeds by skipping insertion when an entry with the same URL already exists",
-	"version": "1.1.1",
+	"description": "Indexed SQLite cross-feed deduplication with lifecycle tracking, serialized refreshes, and safe maintenance",
+	"version": "1.3.0",
 	"entrypoint": "DeduplicateEntries",
 	"type": "system"
 }

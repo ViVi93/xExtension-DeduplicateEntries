@@ -1,0 +1,30 @@
+name: PHP regression tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite, sqlite3, mbstring
+          coverage: none
+      - name: Syntax and regression tests
+        run: |
+          set -eu
+          php -l extension.php
+          php -l Url.php
+          php -l SqliteIndex.php
+          php -l Cleanup.php
+          php tests/run.php
+          php tests/index.php
+          php tests/cleanup.php
+          php tests/maintenance.php

@@ -1,0 +1,21 @@
+--- a/xExtension-FilterTitle/extension.php
++++ b/xExtension-FilterTitle/extension.php
+@@ -66,3 +66,3 @@
+-        if (1 === preg_match($pattern, $title)) {
+-            return true;
+-        } elseif (strpos($title, $pattern) !== false) {
++        // A configured keyword may be literal text, not a delimited regex.
++        // Keep the existing literal fallback even for malformed regex patterns.
++        if (strpos($title, $pattern) !== false) {
+@@ -71 +71,10 @@
+-        return false;
++        if ($pattern === '' || ctype_alnum($pattern[0]) || $pattern[0] === '\\'
++            || ctype_space($pattern[0])) {
++            return false;
++        }
++        set_error_handler(static function (): bool { return true; });
++        try {
++            return preg_match($pattern, $title) === 1;
++        } finally {
++            restore_error_handler();
++        }
